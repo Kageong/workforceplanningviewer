@@ -24,10 +24,10 @@ set GOOGLE_API_KEY=your-key
 streamlit run app.py
 ```
 
-Demo logins:
+Demo logins (username only):
 
-- `mgr_north` / `north123` — North Plant (`WU_NORTH`)
-- `mgr_south` / `south123` — South Plant (`WU_SOUTH`)
+- `mgr_north` — North Plant (`WU_NORTH`)
+- `mgr_south` — South Plant (`WU_SOUTH`)
 
 ## Streamlit Cloud
 

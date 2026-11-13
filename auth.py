@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,11 +19,8 @@ class ManagerSession:
     unit_name: str
 
 
-def _hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
-def authenticate(username: str, password: str, db_path: Path | None = None) -> ManagerSession | None:
+def authenticate(username: str, db_path: Path | None = None) -> ManagerSession | None:
+    """Demo login: manager username only (no password check)."""
     db_path = db_path or DB_PATH
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     cur = conn.cursor()
@@ -33,9 +29,9 @@ def authenticate(username: str, password: str, db_path: Path | None = None) -> M
         SELECT m.manager_id, m.username, m.name, m.working_unit_id, w.unit_name
         FROM managers m
         JOIN working_units w ON w.working_unit_id = m.working_unit_id
-        WHERE m.username = ? AND m.password_hash = ? AND m.role = 'Manager'
+        WHERE m.username = ? AND m.role = 'Manager'
         """,
-        (username.strip(), _hash_password(password)),
+        (username.strip(),),
     )
     row = cur.fetchone()
     conn.close()

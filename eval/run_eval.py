@@ -23,7 +23,7 @@ async def _run_case(case: dict, telemetry: CostTelemetry) -> str:
 
     from auth import authenticate  # noqa: WPS433
 
-    mgr = authenticate(case["manager_username"], "north123" if "north" in case["manager_username"] else "south123", DB)
+    mgr = authenticate(case["manager_username"], DB)
     if mgr is None:
         return "AUTH_FAILED"
     return (

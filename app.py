@@ -123,13 +123,12 @@ async def run_agent_turn(
 
 def login_page() -> None:
     st.title("Workforce Planning — Manager Login")
-    st.caption("Demo: `mgr_north` / `north123` or `mgr_south` / `south123`")
+    st.caption("Demo: enter `mgr_north` or `mgr_south` (no password).")
     with st.form("login"):
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        username = st.text_input("Manager username")
         submitted = st.form_submit_button("Sign in", use_container_width=True)
     if submitted:
-        session = authenticate(username, password, DB_FILE)
+        session = authenticate(username, DB_FILE)
         if session is None:
             st.error("Invalid credentials or not a manager account.")
         else:

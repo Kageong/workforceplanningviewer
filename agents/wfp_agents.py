@@ -19,6 +19,7 @@ MCP_SERVER = str(BASE_DIR / "mcp_wfp_server.py")
 DB_FILE = str(BASE_DIR / "data" / "enterprise.db")
 
 MCP_TOOLS = ["list_tables", "describe_table", "read_query", "read_policy"]
+MODEL_ID = "gemini-3.5-flash"
 
 
 def _mcp_toolset(working_unit_id: str) -> McpToolset:
@@ -54,7 +55,7 @@ def build_coordinator(
 
     employee_specialist = Agent(
         name="employee_specialist",
-        model="gemini-2.5-flash",
+        model=MODEL_ID,
         description="Lists employees in the manager's working unit via MCP.",
         instruction=(
             f"{unit_ctx}\n"
@@ -70,7 +71,7 @@ def build_coordinator(
 
     shift_specialist = Agent(
         name="shift_specialist",
-        model="gemini-2.5-flash",
+        model=MODEL_ID,
         description="Retrieves shift schedules for the manager's unit via MCP.",
         instruction=(
             f"{unit_ctx}\n"
@@ -86,7 +87,7 @@ def build_coordinator(
 
     leave_specialist = Agent(
         name="leave_specialist",
-        model="gemini-2.5-flash",
+        model=MODEL_ID,
         description="Retrieves leave balances and requests for the manager's unit.",
         instruction=(
             f"{unit_ctx}\n"
@@ -101,7 +102,7 @@ def build_coordinator(
 
     policy_specialist = Agent(
         name="policy_specialist",
-        model="gemini-2.5-flash",
+        model=MODEL_ID,
         description="Answers policy questions from markdown handbooks.",
         instruction=(
             f"{unit_ctx}\n"
@@ -115,7 +116,7 @@ def build_coordinator(
 
     report_compiler = Agent(
         name="report_compiler",
-        model="gemini-2.5-flash",
+        model=MODEL_ID,
         description="Merges specialist JSON into a manager-ready employee report.",
         instruction=(
             "You compile structured JSON from shift and leave specialists into a "
@@ -127,7 +128,7 @@ def build_coordinator(
 
     coordinator = Agent(
         name="wfp_coordinator",
-        model="gemini-2.5-flash",
+        model=MODEL_ID,
         description="Routes manager workforce questions to shift, leave, or policy specialists.",
         instruction=(
             f"{unit_ctx}\n"
