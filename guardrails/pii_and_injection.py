@@ -9,7 +9,8 @@ from google.genai import types
 
 INJECTION_PATTERNS = (
     r"ignore\s+(all\s+)?previous\s+instructions",
-    r"show\s+(all\s+)?units",
+    r"show\s+all\s+working\s+units",
+    r"show\s+employees?\s+from\s+(other|another|all)\s+units?",
     r"other\s+working\s+unit",
     r"drop\s+table",
     r"delete\s+from",

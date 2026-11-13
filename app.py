@@ -69,7 +69,7 @@ async def run_agent_turn(
     unit_name: str,
     telemetry: CostTelemetry,
 ) -> tuple[str, list[str]]:
-    agent, mcp_toolset = build_coordinator(
+    agent, mcp_toolsets = build_coordinator(
         working_unit_id, unit_name, manager_name, telemetry
     )
     try:
@@ -89,8 +89,8 @@ async def run_agent_turn(
         )
 
         msg = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
-        reply_parts: list[str] = []
         tools_called: list[str] = []
+        final_text = ""
 
         async for event in runner.run_async(
             user_id=working_unit_id,
@@ -101,13 +101,24 @@ async def run_agent_turn(
                 for part in event.content.parts:
                     if getattr(part, "function_call", None):
                         tools_called.append(part.function_call.name)
-                    elif getattr(part, "text", None):
-                        reply_parts.append(part.text)
+            if (
+                getattr(event, "is_final_response", None)
+                and event.is_final_response()
+                and event.content
+                and event.content.parts
+            ):
+                chunk = "".join(
+                    p.text for p in event.content.parts if getattr(p, "text", None)
+                )
+                if chunk.strip():
+                    final_text = chunk
 
-        final = "".join(reply_parts) if reply_parts else "No response generated."
-        return final, tools_called
+        if not final_text:
+            final_text = "No response generated. Check Streamlit logs or retry."
+        return final_text, tools_called
     finally:
-        await mcp_toolset.close()
+        for toolset in mcp_toolsets:
+            await toolset.close()
 
 
 def login_page() -> None:
@@ -156,6 +167,7 @@ def main_app() -> None:
     st.caption("Multi-agent coordinator via MCP (read-only, unit-scoped)")
 
     sample_prompts = [
+        "Show me all employees in my working unit.",
         "How many employees are scheduled on 2026-11-17 in my unit?",
         "Employee report for E_N101 this week: shifts and annual leave balance.",
         "What is the minimum rest between shifts per policy?",
@@ -177,16 +189,24 @@ def main_app() -> None:
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.spinner("Running coordinator + specialists..."):
-            reply, tools = asyncio.run(
-                run_agent_turn(
-                    prompt,
-                    st.session_state.messages[:-1],
-                    mgr.name,
-                    mgr.working_unit_id,
-                    mgr.unit_name,
-                    telemetry,
+            try:
+                reply, tools = asyncio.run(
+                    run_agent_turn(
+                        prompt,
+                        st.session_state.messages[:-1],
+                        mgr.name,
+                        mgr.working_unit_id,
+                        mgr.unit_name,
+                        telemetry,
+                    )
                 )
-            )
+            except Exception as exc:
+                reply = (
+                    f"**Agent error:** `{exc}`\n\n"
+                    "If this is Streamlit Cloud, confirm `GOOGLE_API_KEY` is set "
+                    "and the app was rebooted after secrets were saved."
+                )
+                tools = []
         st.session_state.messages.append(
             {"role": "assistant", "content": reply, "tools": tools}
         )

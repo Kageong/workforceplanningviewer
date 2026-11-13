@@ -46,7 +46,27 @@ def build_coordinator(
         f'manager_working_unit_id="{working_unit_id}".'
     )
 
-    shared_mcp = _mcp_toolset(working_unit_id)
+    roster_mcp = _mcp_toolset(working_unit_id)
+    shift_mcp = _mcp_toolset(working_unit_id)
+    leave_mcp = _mcp_toolset(working_unit_id)
+    policy_mcp = _mcp_toolset(working_unit_id)
+    mcp_toolsets = [roster_mcp, shift_mcp, leave_mcp, policy_mcp]
+
+    employee_specialist = Agent(
+        name="employee_specialist",
+        model="gemini-2.5-flash",
+        description="Lists employees in the manager's working unit via MCP.",
+        instruction=(
+            f"{unit_ctx}\n"
+            "You answer roster questions: list all employees, count employees, "
+            "lookup by name or employee_id in the employees table.\n"
+            "Use list_tables, describe_table, read_query on employees.\n"
+            "Return a clear markdown table with employee_id, name, role."
+        ),
+        tools=[roster_mcp],
+        before_model_callback=before_model_guardrail,
+        after_model_callback=make_after_model_cost_tracker(telemetry),
+    )
 
     shift_specialist = Agent(
         name="shift_specialist",
@@ -59,7 +79,7 @@ def build_coordinator(
             "Return compact JSON: "
             '{"section":"shifts","employee_id":null|"id","rows":[],"notes":""}'
         ),
-        tools=[shared_mcp],
+        tools=[shift_mcp],
         before_model_callback=before_model_guardrail,
         after_model_callback=make_after_model_cost_tracker(telemetry),
     )
@@ -74,7 +94,7 @@ def build_coordinator(
             "Return compact JSON: "
             '{"section":"leave","employee_id":null|"id","balances":[],"requests":[],"notes":""}'
         ),
-        tools=[shared_mcp],
+        tools=[leave_mcp],
         before_model_callback=before_model_guardrail,
         after_model_callback=make_after_model_cost_tracker(telemetry),
     )
@@ -88,7 +108,7 @@ def build_coordinator(
             "Use read_policy for shift_scheduling_rules.md, leave_and_balance.md, "
             "or manager_data_access.md. Cite the policy file name."
         ),
-        tools=[shared_mcp],
+        tools=[policy_mcp],
         before_model_callback=before_model_guardrail,
         after_model_callback=make_after_model_cost_tracker(telemetry),
     )
@@ -111,6 +131,7 @@ def build_coordinator(
         description="Routes manager workforce questions to shift, leave, or policy specialists.",
         instruction=(
             f"{unit_ctx}\n"
+            "Route roster questions (list/show/count employees in my unit) to employee_specialist.\n"
             "Route shift-only questions to shift_specialist.\n"
             "Route leave-only questions to leave_specialist.\n"
             "Route policy questions to policy_specialist.\n"
@@ -119,6 +140,7 @@ def build_coordinator(
             "Never query data yourself; always delegate."
         ),
         tools=[
+            AgentTool(agent=employee_specialist),
             AgentTool(agent=shift_specialist),
             AgentTool(agent=leave_specialist),
             AgentTool(agent=policy_specialist),
@@ -128,4 +150,4 @@ def build_coordinator(
         after_model_callback=make_after_model_cost_tracker(telemetry),
     )
 
-    return coordinator, shared_mcp
+    return coordinator, mcp_toolsets
