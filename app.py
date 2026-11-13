@@ -188,6 +188,9 @@ def main_app() -> None:
     prompt = user_input or st.session_state.pop("pending_prompt", None)
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
+        # Render the user turn immediately (history loop ran before append).
+        with st.chat_message("user"):
+            st.markdown(prompt)
         with st.spinner("Running coordinator + specialists..."):
             try:
                 reply, tools = asyncio.run(
