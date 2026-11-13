@@ -20,7 +20,8 @@ if str(BASE_DIR) not in sys.path:
 from agents.wfp_agents import build_coordinator  # noqa: E402
 from auth import authenticate  # noqa: E402
 from callbacks.cost_tracker import CostTelemetry  # noqa: E402
-from scripts.bootstrap_db import bootstrap  # noqa: E402
+from callbacks.output_redaction import redact_sensitive_text  # noqa: E402
+from scripts.bootstrap_db import ensure_db  # noqa: E402
 
 st.set_page_config(
     page_title="Workforce Shift Analyst",
@@ -42,8 +43,7 @@ if api_key:
     os.environ["GOOGLE_API_KEY"] = api_key
 os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "FALSE")
 
-if not DB_FILE.exists():
-    bootstrap(DB_FILE)
+ensure_db(DB_FILE)
 
 if not os.environ.get("GOOGLE_API_KEY"):
     st.error("GOOGLE_API_KEY is missing. Add it to Streamlit Secrets or your environment.")
@@ -115,7 +115,7 @@ async def run_agent_turn(
 
         if not final_text:
             final_text = "No response generated. Check Streamlit logs or retry."
-        return final_text, tools_called
+        return redact_sensitive_text(final_text), tools_called
     finally:
         for toolset in mcp_toolsets:
             await toolset.close()
@@ -150,7 +150,7 @@ def main_app() -> None:
     with st.sidebar:
         st.subheader("Session")
         st.write(f"**{mgr.name}** ({mgr.username})")
-        st.write(f"Unit: **{mgr.unit_name}** (`{mgr.working_unit_id}`)")
+        st.write(f"Working unit: **{mgr.unit_name}**")
         st.markdown("---")
         stats = telemetry.to_dict()
         st.metric("Total tokens", stats["total_tokens"])
@@ -165,10 +165,13 @@ def main_app() -> None:
     st.title("Workforce Shift & Leave Analyst")
     st.caption("Multi-agent coordinator via MCP (read-only, unit-scoped)")
 
+    report_employee = (
+        "Nina Patel" if mgr.working_unit_id == "WU_NORTH" else "David Lee"
+    )
     sample_prompts = [
-        "Show me all employees in my working unit.",
-        "How many employees are scheduled on 2026-11-17 in my unit?",
-        "Employee report for E_N101 this week: shifts and annual leave balance.",
+        f"Show me all employees at {mgr.unit_name}.",
+        f"How many people at {mgr.unit_name} are scheduled on 2026-11-17?",
+        f"Employee report for {report_employee} this week: shifts and annual leave balance.",
         "What is the minimum rest between shifts per policy?",
         "DELETE FROM employees",
     ]

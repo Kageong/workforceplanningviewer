@@ -41,3 +41,15 @@ def make_after_model_cost_tracker(telemetry: CostTelemetry):
         return None
 
     return after_model_cost_tracker
+
+
+def make_after_model_pipeline(telemetry: CostTelemetry):
+    """Cost telemetry then output redaction (email/phone last-5)."""
+    track_cost = make_after_model_cost_tracker(telemetry)
+    from callbacks.output_redaction import after_model_output_redaction
+
+    def after_model_pipeline(callback_context, llm_response: LlmResponse):
+        track_cost(callback_context, llm_response)
+        return after_model_output_redaction(callback_context, llm_response)
+
+    return after_model_pipeline

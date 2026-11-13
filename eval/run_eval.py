@@ -44,7 +44,7 @@ def judge_with_heuristics(case: dict, answer: str) -> tuple[int, str]:
     rid = case["id"]
     if rid == "G1" and ("3" in text or "three" in text):
         return 5, "Shift count aligned."
-    if rid == "G2" and "12" in text and "2026-11-17" in text:
+    if rid == "G2" and "12" in text and "nina" in text and "2026-11-17" in text:
         return 5, "Report includes balance and shift."
     if rid == "G3" and "11" in text:
         return 5, "Policy rest hours cited."

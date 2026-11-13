@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS managers (
 CREATE TABLE IF NOT EXISTS employees (
     employee_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    contact_number TEXT,
+    email TEXT,
     working_unit_id TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'Employee',
     FOREIGN KEY (working_unit_id) REFERENCES working_units(working_unit_id)
@@ -74,14 +76,6 @@ INSERT OR REPLACE INTO managers VALUES
     ('MGR_N001', 'mgr_north', '%(pw_north)s', 'WU_NORTH', 'Alice North', 'Manager'),
     ('MGR_S001', 'mgr_south', '%(pw_south)s', 'WU_SOUTH', 'Bob South', 'Manager');
 
-INSERT OR REPLACE INTO employees VALUES
-    ('E_N101', 'Nina Patel', 'WU_NORTH', 'Employee'),
-    ('E_N102', 'James Wong', 'WU_NORTH', 'Employee'),
-    ('E_N103', 'Siti Rahman', 'WU_NORTH', 'Employee'),
-    ('E_S201', 'David Lee', 'WU_SOUTH', 'Employee'),
-    ('E_S202', 'Maria Gomez', 'WU_SOUTH', 'Employee'),
-    ('E_S203', 'Omar Hassan', 'WU_SOUTH', 'Employee');
-
 INSERT OR REPLACE INTO shifts VALUES
     ('SH_N01', 'E_N101', '2026-11-17', '08:00', '16:00'),
     ('SH_N02', 'E_N102', '2026-11-17', '08:00', '16:00'),
@@ -107,6 +101,38 @@ INSERT OR REPLACE INTO leave_requests VALUES
 """
 
 
+EMPLOYEES = [
+    ("E_N101", "Nina Patel", "+60123451001", "nina.patel@corp.local", "WU_NORTH", "Employee"),
+    ("E_N102", "James Wong", "+60198765402", "james.wong@corp.local", "WU_NORTH", "Employee"),
+    ("E_N103", "Siti Rahman", "+60135551203", "siti.rahman@corp.local", "WU_NORTH", "Employee"),
+    ("E_S201", "David Lee", "+60187654304", "david.lee@corp.local", "WU_SOUTH", "Employee"),
+    ("E_S202", "Maria Gomez", "+60124681305", "maria.gomez@corp.local", "WU_SOUTH", "Employee"),
+    ("E_S203", "Omar Hassan", "+60131415906", "omar.hassan@corp.local", "WU_SOUTH", "Employee"),
+]
+
+
+def _upsert_employees(conn: sqlite3.Connection) -> None:
+    conn.executemany(
+        """
+        INSERT OR REPLACE INTO employees
+        (employee_id, name, contact_number, email, working_unit_id, role)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        EMPLOYEES,
+    )
+
+
+def _migrate_employee_contacts(conn: sqlite3.Connection) -> None:
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(employees)")
+    cols = {row[1] for row in cur.fetchall()}
+    if "contact_number" not in cols:
+        cur.execute("ALTER TABLE employees ADD COLUMN contact_number TEXT")
+    if "email" not in cols:
+        cur.execute("ALTER TABLE employees ADD COLUMN email TEXT")
+    _upsert_employees(conn)
+
+
 def bootstrap(db_path: Path | None = None) -> Path:
     db_path = db_path or DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -116,6 +142,19 @@ def bootstrap(db_path: Path | None = None) -> Path:
     }
     conn = sqlite3.connect(db_path)
     conn.executescript(sql)
+    _migrate_employee_contacts(conn)  # columns + employee seed/upsert
+    conn.commit()
+    conn.close()
+    return db_path
+
+
+def ensure_db(db_path: Path | None = None) -> Path:
+    """Create DB if missing; otherwise apply lightweight migrations only."""
+    db_path = db_path or DB_PATH
+    if not db_path.exists():
+        return bootstrap(db_path)
+    conn = sqlite3.connect(db_path)
+    _migrate_employee_contacts(conn)
     conn.commit()
     conn.close()
     return db_path

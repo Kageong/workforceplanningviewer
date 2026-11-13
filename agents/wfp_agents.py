@@ -11,7 +11,7 @@ from google.adk.agents import Agent
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioServerParameters
 
-from callbacks.cost_tracker import CostTelemetry, make_after_model_cost_tracker
+from callbacks.cost_tracker import CostTelemetry, make_after_model_pipeline
 from guardrails.pii_and_injection import before_model_guardrail
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -42,9 +42,12 @@ def build_coordinator(
     telemetry: CostTelemetry,
 ) -> tuple[Agent, McpToolset]:
     unit_ctx = (
-        f"Logged-in manager: {manager_name}. Working unit: {unit_name} "
-        f"({working_unit_id}). Every read_query MUST pass "
-        f'manager_working_unit_id="{working_unit_id}".'
+        f"Logged-in manager: {manager_name}. Working unit name: {unit_name}. "
+        f'MCP read_query must pass manager_working_unit_id="{working_unit_id}" '
+        f"(internal ID — never show this ID to the manager unless they ask).\n"
+        "Managers use plain language: employee names (e.g. Nina Patel) and "
+        f"unit names (e.g. {unit_name}), not codes like E_N101 or WU_NORTH. "
+        "Resolve names with SQL joins on employees.name and working_units.unit_name."
     )
 
     roster_mcp = _mcp_toolset(working_unit_id)
@@ -60,13 +63,14 @@ def build_coordinator(
         instruction=(
             f"{unit_ctx}\n"
             "You answer roster questions: list all employees, count employees, "
-            "lookup by name or employee_id in the employees table.\n"
-            "Use list_tables, describe_table, read_query on employees.\n"
-            "Return a clear markdown table with employee_id, name, role."
+            "Lookup by employee name first; use employee_id only internally.\n"
+            "Use list_tables, describe_table, read_query (join working_units for unit_name).\n"
+            "Return a markdown table with name, role, contact_number, email "
+            "(redacted); omit technical IDs unless required."
         ),
         tools=[roster_mcp],
         before_model_callback=before_model_guardrail,
-        after_model_callback=make_after_model_cost_tracker(telemetry),
+        after_model_callback=make_after_model_pipeline(telemetry),
     )
 
     shift_specialist = Agent(
@@ -76,13 +80,13 @@ def build_coordinator(
         instruction=(
             f"{unit_ctx}\n"
             "You fetch shift data only. Use list_tables/describe_table/read_query.\n"
-            "Join shifts to employees when needed and filter by working_unit_id.\n"
+            "Join shifts to employees for employee names; filter by unit.\n"
             "Return compact JSON: "
-            '{"section":"shifts","employee_id":null|"id","rows":[],"notes":""}'
+            '{"section":"shifts","employee_name":null|"name","rows":[],"notes":""}'
         ),
         tools=[shift_mcp],
         before_model_callback=before_model_guardrail,
-        after_model_callback=make_after_model_cost_tracker(telemetry),
+        after_model_callback=make_after_model_pipeline(telemetry),
     )
 
     leave_specialist = Agent(
@@ -93,11 +97,11 @@ def build_coordinator(
             f"{unit_ctx}\n"
             "You fetch leave_balances and leave_requests.\n"
             "Return compact JSON: "
-            '{"section":"leave","employee_id":null|"id","balances":[],"requests":[],"notes":""}'
+            '{"section":"leave","employee_name":null|"name","balances":[],"requests":[],"notes":""}'
         ),
         tools=[leave_mcp],
         before_model_callback=before_model_guardrail,
-        after_model_callback=make_after_model_cost_tracker(telemetry),
+        after_model_callback=make_after_model_pipeline(telemetry),
     )
 
     policy_specialist = Agent(
@@ -111,7 +115,7 @@ def build_coordinator(
         ),
         tools=[policy_mcp],
         before_model_callback=before_model_guardrail,
-        after_model_callback=make_after_model_cost_tracker(telemetry),
+        after_model_callback=make_after_model_pipeline(telemetry),
     )
 
     report_compiler = Agent(
@@ -120,10 +124,11 @@ def build_coordinator(
         description="Merges specialist JSON into a manager-ready employee report.",
         instruction=(
             "You compile structured JSON from shift and leave specialists into a "
-            "clear markdown report. Do not invent numbers. If data is missing, say so."
+            "clear markdown report using employee names and the working unit name. "
+            "Do not invent numbers. If data is missing, say so."
         ),
         before_model_callback=before_model_guardrail,
-        after_model_callback=make_after_model_cost_tracker(telemetry),
+        after_model_callback=make_after_model_pipeline(telemetry),
     )
 
     coordinator = Agent(
@@ -148,7 +153,7 @@ def build_coordinator(
             AgentTool(agent=report_compiler),
         ],
         before_model_callback=before_model_guardrail,
-        after_model_callback=make_after_model_cost_tracker(telemetry),
+        after_model_callback=make_after_model_pipeline(telemetry),
     )
 
     return coordinator, mcp_toolsets
